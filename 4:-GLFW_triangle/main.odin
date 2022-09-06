@@ -29,6 +29,8 @@ import "core:c"
 
 // Here we import OpenGL and rename it to gl for short
 import gl "vendor:OpenGL"
+
+import glm "core:math/linalg/glsl"
 // We use GLFW for cross platform window creation and input handling
 import "vendor:glfw"
 
@@ -51,6 +53,9 @@ GL_MINOR_VERSION :: 6
 // We use b32 for allignment and easy compatibility with the glfw.WindowShouldClose procedure
 // See https://odin-lang.org/docs/overview/#basic-types for more information on the types in Odin
 running: b32 = true
+
+rendering_program: u32
+vertex_array_object: u32
 
 // The main function is the entry point for the application
 // In Odin functions/methods are more precisely named procedures
@@ -165,29 +170,43 @@ void main(void)
 }
 `
 
-fragment_shader_source :=
-	"#version 450 core" +
-	"" +
-	"out vec4 color;" +
-	"" +
-	"void main(void)" +
-	"{" +
-	"color = vec4(0.0, 0.0, 1.0, 1.0);" +
-	"}"
+fragment_shader_source := `#version 450 core
+out vec4 color;
 
-compile_shaders :: proc() -> int {
+void main(void)
+{
+	color = vec4(1.0, 1.0, 1.0, 1.0);
+}
+`
 
-
+compile_shaders :: proc() -> u32 {
 	vertex_shader := gl.CreateShader(gl.VERTEX_SHADER)
-	length := i32(len(vertex_shader_source))
+	length_v := i32(len(vertex_shader_source))
 	vertex_shader_source_copy := cstring(raw_data(vertex_shader_source))
-	gl.ShaderSource(vertex_shader, 1, &vertex_shader_source_copy, &length)
+	gl.ShaderSource(vertex_shader, 1, &vertex_shader_source_copy, &length_v)
+	gl.CompileShader(vertex_shader)
 
-	return 0
+	fragment_shader := gl.CreateShader(gl.FRAGMENT_SHADER)
+	length_f := i32(len(fragment_shader_source))
+	fragment_shader_source_copy := cstring(raw_data(fragment_shader_source))
+	gl.ShaderSource(fragment_shader, 1, &fragment_shader_source_copy, &length_f)
+	gl.CompileShader(fragment_shader)
+
+	program := gl.CreateProgram()
+	gl.AttachShader(program, vertex_shader)
+	gl.AttachShader(program, fragment_shader)
+	gl.LinkProgram(program)
+
+	gl.DeleteShader(vertex_shader)
+	gl.DeleteShader(fragment_shader)
+
+	return program
 }
 
 init :: proc() {
-	// Own initialization code there
+	rendering_program = compile_shaders()
+	gl.CreateVertexArrays(1, &(vertex_array_object))
+	gl.BindVertexArray(vertex_array_object)
 }
 
 update :: proc() {
@@ -195,17 +214,16 @@ update :: proc() {
 }
 
 draw :: proc() {
-	// Set the opengl clear color
-	// 0-1 rgba values
-	gl.ClearColor(0.2, 0.3, 0.3, 1.0)
-	// Clear the screen with the set clearcolor
-	gl.Clear(gl.COLOR_BUFFER_BIT)
+	color := []f32{0.0, 0.0, 0.0, 1.0}
 
-	// Own drawing code here
+	gl.ClearBufferfv(gl.COLOR, 0, &color[0])
+	gl.UseProgram(rendering_program)
+	gl.DrawArrays(gl.POINTS, 0, 1)
 }
 
 exit :: proc() {
-	// Own termination code here
+	gl.DeleteVertexArrays(1, &vertex_array_object)
+	gl.DeleteProgram(rendering_program)
 }
 
 // Called when glfw keystate changes
